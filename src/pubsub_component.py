@@ -129,6 +129,9 @@ class PubsubComponent(ComponentXMPP):
         id_reply['pubsub'].append(subscriptions)
         return iq_reply.send(block=False)
 
+    def _pubsub_retreive_affiliations(self, iq, jid, node=None):
+        raise XMPPError(condition='feature-not-implemented')
+
     def _pubsub_get_items(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
     
