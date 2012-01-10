@@ -103,7 +103,7 @@ class PubsubComponent(ComponentXMPP):
         iq_reply = self.makeIqResult(id=iq['id'], ifrom=iq['to'], ito=iq['from'])
         return iq_reply.send(block=False)
 
-    def _pubsub_retreive_subscriptions(self, iq, jid, node=None):
+    def _pubsub_retrieve_subscriptions(self, iq, jid, node=None):
         param = [jid + '%']
         query = "SELECT node, jid, 'subscribed', subid FROM subscriptions WHERE jid LIKE ?"
 
@@ -129,7 +129,7 @@ class PubsubComponent(ComponentXMPP):
         id_reply['pubsub'].append(subscriptions)
         return iq_reply.send(block=False)
 
-    def _pubsub_retreive_affiliations(self, iq, jid, node=None):
+    def _pubsub_retrieve_affiliations(self, iq, jid, node=None):
         raise XMPPError(condition='feature-not-implemented')
 
     def _pubsub_get_items(self, iq, jid, node):
