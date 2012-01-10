@@ -13,10 +13,12 @@ import sys
 import logging
 import time
 from optparse import OptionParser
+import re
 
 import sleekxmpp
 from sleekxmpp.componentxmpp import ComponentXMPP
 from sleekxmpp.exceptions import XMPPError
+from sleekxmpp.plugins.xep_0060.stanza.pubsub import Subscriptions
 
 # Python versions before 3.0 do not use UTF-8 encoding
 # by default. To ensure that Unicode is handled properly
@@ -48,6 +50,8 @@ class PubsubComponent(ComponentXMPP):
         
         self.add_event_handler("pubsub_subscribe", self._pubsub_subscribe)
         self.add_event_handler("pubsub_unsubscribe", self._pubsub_unsubscribe)
+        self.add_event_handler("pubsub_retrieve_subscriptions", self._pubsub_retrieve_subscriptions)
+        self.add_event_handler("pubsub_retrieve_affiliations", self._pubsub_retrieve_affiliations)
         self.add_event_handler("pubsub_get_items", self._pubsub_get_items)
 
         self.add_event_handler("pubsub_set_items", self._pubsub_set_items)
@@ -59,32 +63,88 @@ class PubsubComponent(ComponentXMPP):
         self.auto_authorize = True # Automatic bidirectional subscriptions
         self.auto_subscribe = True
 
+        self.pnick = 'openOV Transit Pubsub'
+        self._node_pattern = re.compile('')
+
     def _disco_items_query(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_unsubscribe(self, iq):
-        raise XMPPError(condition='feature-not-implemented')
+    def _pubsub_subscribe(self, iq, jid, node=None):
+        if node is not None:
+            match = self._node_pattern.match(node)
+            if match is not None:
+                self.send_presence_subscription(pto=jid, ptype='subscribe', pnick=self.pnick)
+                query = "INSERT INTO subscriptions (jid, node) VALUES (?, ?);"
+                c = self.conn.cursor()
+                c.execute(sql + ';', param)
+                c.close()
+                iq_reply = self.makeIqResult(id=iq['id'], ifrom=iq['to'], ito=iq['from'])
+                return iq_reply.send(block=False)
 
-    def _pubsub_subscribe(self, iq):
-        # self._check_subscription(iq['from'].full)
-        raise XMPPError(condition='feature-not-implemented')
+        raise XMPPError(condition='item-not-found')
 
-    def _pubsub_get_items(self, iq):
+    def _pubsub_unsubscribe(self, iq, jid, node=None, subid=None):
+        param = [jid]
+        query = "DELETE FROM subscriptions WHERE jid = ?"
+
+        if node is not None:
+            param.append(node)
+            query += " AND node = ?"
+
+        if subid is not None:
+            param.append(subid)
+            query += " AND subid = ?"
+        
+        c = self.conn.cursor()
+        # TODO; do something smart in the error case
+        c.execute(sql + ';', param)
+        c.close()
+        
+        iq_reply = self.makeIqResult(id=iq['id'], ifrom=iq['to'], ito=iq['from'])
+        return iq_reply.send(block=False)
+
+    def _pubsub_retreive_subscriptions(self, iq, jid, node=None):
+        param = [jid + '%']
+        query = "SELECT node, jid, 'subscribed', subid FROM subscriptions WHERE jid LIKE ?"
+
+        if node is not None:
+            param.append(node)
+            query += " AND node = ?"
+
+        subcriptions = Subscriptions()
+        
+        c = self.conn.cursor()
+        c.execute(sql + ';', param)
+        for row in c.fetchall():
+            subscription = Subscription()
+            subscription['node'] = row[0]
+            subscription['jid'] = row[1]
+            subscription['subscription'] = row[2]
+            subscription['subid'] = row[3]
+            subscriptions.append(subscription)
+
+        c.close()
+
+        iq_reply = self.makeIqResult(id=iq['id'], ifrom=iq['to'], ito=iq['from'])
+        id_reply['pubsub'].append(subscriptions)
+        return iq_reply.send(block=False)
+
+    def _pubsub_get_items(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
     
-    def _pubsub_set_items(self, iq):
+    def _pubsub_set_items(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_create_node(self, iq):
+    def _pubsub_create_node(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_delete_node(self, iq):
+    def _pubsub_delete_node(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_retract(self, iq):
+    def _pubsub_retract(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_get_config_node(self, iq):
+    def _pubsub_get_config_node(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
     def start(self, event):
