@@ -46,7 +46,6 @@ class PubsubComponent(ComponentXMPP):
         # listen for this event so that we we can intialize
         # our roster.
         self.add_event_handler("session_start", self.start)
-        self.add_event_handler("disco_items_query", self._disco_items_query)
         
         self.add_event_handler("pubsub_subscribe", self._pubsub_subscribe)
         self.add_event_handler("pubsub_unsubscribe", self._pubsub_unsubscribe)
@@ -64,10 +63,31 @@ class PubsubComponent(ComponentXMPP):
         self.auto_subscribe = True
 
         self.pnick = 'openOV Transit Pubsub'
-        self._node_pattern = re.compile('')
+        
+        self.modalities = { 
+                            'bus': bus(),
+                          # 'drive': drive(),
+                          # 'taxi': taxi(),
+                          # 'tram': tram(),
+                            'train': train(),
+                          # 'walk': walk(),
+                          # 'cycle': cycle()
+                          }
+ 
+    def _get_items(self, jid, node, data, disco):
+        if node == 'passtimes':
+            # return all next departures
 
-    def _disco_items_query(self, iq):
-        raise XMPPError(condition='feature-not-implemented')
+        elif node in self.modalities.keys():
+            return self.modalities[node].get_items(jid, node, data, disco)
+    
+        raise XMPPError(condition='item-not-found')
+
+    def _disco_items_query(self, jid, node, data):
+        return _get_items(jid, node, data, self['xep_0030'])
+    
+    def _pubsub_get_items(self, data, jid, node):
+        return _get_items(jid, node, data, None)  
 
     def _pubsub_subscribe(self, iq, jid, node=None):
         if node is not None:
@@ -132,9 +152,6 @@ class PubsubComponent(ComponentXMPP):
     def _pubsub_retrieve_affiliations(self, iq, jid, node=None):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_get_items(self, iq, jid, node):
-        raise XMPPError(condition='feature-not-implemented')
-    
     def _pubsub_set_items(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
@@ -150,6 +167,20 @@ class PubsubComponent(ComponentXMPP):
     def _pubsub_get_config_node(self, iq, jid, node):
         raise XMPPError(condition='feature-not-implemented')
 
+    def cache_service_discovery(self, jid):
+        self['xep_0030'].add_item(jid=jid, name='Any', node='', subnode='*')
+        for subnode, modality in modalities.items():
+            modality.cache_service_discovery(self['xep_0030'], jid)
+            self['xep_0030'].add_item(jid=jid, name=modality.name, node='', subnode=subnode)
+
+        for code, station in self.stations.stations.items():
+            self['xep_0030'].add_item(jid=jid, name=station.name, node='stations', subnode='stations/%s'%(code))
+            self['xep_0030'].add_item(jid=jid, name='Actuele Vertrektijden', node='stations/%s'%(code), subnode='stations/%s/avt'%(code))
+            self['xep_0030'].add_item(jid=jid, name='Voorzieningen', node='stations/%s'%(code), subnode='stations/%s/vz'%(code))
+            self['xep_0030'].add_item(jid=jid, name='Storingen en Werkzaamheden', node='stations/%s'%(code), subnode='stations/%s/storingen'%(code))
+            self['xep_0030'].add_item(jid=jid, name='Actuele Storingen en Werkzaamheden', node='stations/%s/storingen'%(code), subnode='stations/%s/storingen/actueel'%(code))
+            self['xep_0030'].add_item(jid=jid, name='Geplande Storingen en Werkzaamheden', node='stations/%s/storingen'%(code), subnode='stations/%s/storingen/gepland'%(code))
+
     def start(self, event):
         """
         Process the session_start event.
@@ -163,6 +194,8 @@ class PubsubComponent(ComponentXMPP):
                      event does not provide any additional
                      data.
         """
+        self.cache_service_discovery(self.boundjid.bare)
+        self['xep_0030'].set_node_handler('disco_items_query', self.boundjid.bare, handler=self._get_items30)
         return
 
 
