@@ -47,3 +47,51 @@ ORDER BY
 pujo.dataownercode, pujo.lineplanningnumber, pujo.departuretime,
 pujo.timetableversioncode, pujo.journeypatterncode,
 pujo.timedemandgroupcode, timdemrnt.timinglinkorder LIMIT 40;"""
+
+KV8_DATEDPASSTIME="""<tmi8:DATEDPASSTIME xmlns:tmi8="http://bison.connekt.nl/tmi8/kv7kv8/msg">
+    <tmi8:dataownercode>%(dataownercode)s</tmi8:dataownercode>
+    <tmi8:operationdate>%(operationdate)s</tmi8:operationdate>
+    <tmi8:lineplanningnumber>%(lineplanningnumber)s</tmi8:lineplanningnumber>
+    <tmi8:journeynumber>%(journeynumber)s</tmi8:journeynumber>
+    <tmi8:fortifyordernumber>%(fortifyordernumber)s</tmi8:fortifyordernumber>
+    <tmi8:userstopordernumber>%(userstopordernumber)s</tmi8:userstopordernumber>
+    <tmi8:userstopcode>%(userstopcode)s</tmi8:userstopcode>
+    <tmi8:localservicelevelcode>%(localservicelevelcode)s</tmi8:localservicelevelcode>
+    <tmi8:linedirection>%(linedirection)s</tmi8:linedirection>
+    <tmi8:lastupdatetimestamp>%(lastupdatetimetamp)s</tmi8:lastupdatetimestamp>
+    <tmi8:destinationcode>%(destinationcode)s</tmi8:destinationcode>
+    <tmi8:istimingstop>%(istimingpoint)s</tmi8:istimingstop>
+    <tmi8:expectedarrivaltime>%(destinationarrivaltime)s</tmi8:expectedarrivaltime>
+    <tmi8:targetarrivaltime>%(targetarrivaltime)s</tmi8:targetarrivaltime>
+    <tmi8:expecteddeparturetime>%(expecteddeparturetime)</tmi8:expecteddeparturetime>
+    <tmi8:targetdeparturetime>%(targetdeparturetime)</tmi8:targetdeparturetime>
+    <tmi8:tripstopstatus>%(tripstopstatus)s</tmi8:tripstopstatus>
+    <tmi8:sidecode>%(sidecode)s</tmi8:sidecode>
+    <tmi8:wheelchairaccessible>%(wheelchairaccessible)s</tmi8:wheelchairaccessible>
+    <tmi8:timingpointdataownercode>%(timingpointdataownercode)s</tmi8:timingpointdataownercode>
+    <tmi8:timingpointcode>%(timingpointcode)s</tmi8:timingpointcode>
+    <tmi8:journeystoptype>%(journeystoptype)s</tmi8:journeystoptype>
+</tmi8:DATEDPASSTIME>"""
+
+{'dataownercode': dataownercode,
+ 'operationdate': operationdate,
+ 'lineplanningnumber': lineplanningnumber,
+ 'journeynumber': journeynumber,
+ 'fortifyordernumber': fortifyordernumber,
+ 'userstopordernumber': userstopordernumber,
+ 'userstopcode': userstopcode,
+ 'localservicelevelcode': localservicelevelcode,
+ 'linedirection': linedirection,
+ 'lastupdatetimetamp': lastupdatetimetamp,
+ 'destinationcode': destinationcode,
+ 'istimingpoint': istimingpoint,
+ 'destinationarrivaltime': destinationarrivaltime,
+ 'targetarrivaltime': targetarrivaltime,
+ 'expecteddeparturetime': expecteddeparturetime,
+ 'targetdeparturetime': targetdeparturetime,
+ 'tripstopstatus': tripstopstatus,
+ 'sidecode': sidecode,
+ 'wheelchairaccessible': wheelchairaccessible,
+ 'timingpointdataownercode': timingpointdataownercode,
+ 'timingpointcode': timingpointcode,
+ 'journeystoptype': journeystoptype}

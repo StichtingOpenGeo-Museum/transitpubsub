@@ -74,20 +74,20 @@ class PubsubComponent(ComponentXMPP):
                           # 'cycle': cycle()
                           }
  
-    def _get_items(self, jid, node, data, disco):
+    def _get_items(self, jid, node, data, disco, pubsub):
         if node == 'passtimes':
             # return all next departures
 
         elif node in self.modalities.keys():
-            return self.modalities[node].get_items(jid, node, data, disco)
+            return self.modalities[node].get_items(jid, node, data, disco, pubsub)
     
         raise XMPPError(condition='item-not-found')
 
     def _disco_items_query(self, jid, node, data):
-        return _get_items(jid, node, data, self['xep_0030'])
+        return _get_items(jid, node, data, self['xep_0030'], None)
     
-    def _pubsub_get_items(self, data, jid, node):
-        return _get_items(jid, node, data, None)  
+    def _pubsub_get_items(self, iq, jid, node):
+        return _get_items(jid, node, data, None, self['xep_0060'])  
 
     def _pubsub_subscribe(self, iq, jid, node=None):
         if node is not None:

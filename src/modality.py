@@ -33,14 +33,15 @@ class modality:
                                 disco.add_item(jid=jid, name=self.name, node=subnode_town_stopplace_quay, subnode=subnode_quay)
                                 disco.add_item(jid=jid, name=self.name, node=subnode_town_stopplace_quay, subnode=subnode_quay + '/passtimes')
 
-    def get_items(self, jid, node, data, disco):
+    def get_items(self, jid, node, data, disco=None, pubsub=None):
         if disco is not None:
             return disco.static.get_items(jid, node, data)
-        else:
+        
+        elif pubsub is not None:
             match = self.validnode.match(node)
             if match is not None:
                 if match.group(11) is not None:
-                    passtimes(match.group(3), match.group(6), match.group(9))
+                    return self.passtimes(pubsub, match.group(3), match.group(6), match.group(9))
 
         raise XMPPError(condition='item-not-found') 
 
@@ -58,5 +59,41 @@ class modality:
 
         return ' AND '.join([arg+' = %('+arg+')s' for arg in where.keys()])
 
-    def passtimes(self, town, stoparea, quay):
-        KV1_SQL % 
+    def passtimes(self, pubsub, town, stoparea, quay):
+        node_arguments = {'town': town, 'stoparea': stoparea, 'quay': quay }
+
+        items = pubsub.stanza.Items()
+        items['node'] = self.modality + '/town/%(town)s/stoparea/%(stoparea)s/quay/%(quay)s/passtimes' % node_arguments
+
+        # TODO some voodoo
+        sql = KV1_SQL % 
+        for row in cursor.execute(sql):
+            arguments = {'dataownercode': dataownercode, 
+                         'operationdate': operationdate,
+                         'lineplanningnumber': lineplanningnumber,
+                         'journeynumber': journeynumber,
+                         'fortifyordernumber': fortifyordernumber,
+                         'userstopordernumber': userstopordernumber,
+                         'userstopcode': userstopcode,
+                         'localservicelevelcode': localservicelevelcode,
+                         'linedirection': linedirection,
+                         'lastupdatetimetamp': lastupdatetimetamp,
+                         'destinationcode': destinationcode,
+                         'istimingpoint': istimingpoint,
+                         'destinationarrivaltime': destinationarrivaltime,
+                         'targetarrivaltime': targetarrivaltime,
+                         'expecteddeparturetime': expecteddeparturetime,
+                         'targetdeparturetime': targetdeparturetime,
+                         'tripstopstatus': tripstopstatus,
+                         'sidecode': sidecode,
+                         'wheelchairaccessible': wheelchairaccessible,
+                         'timingpointdataownercode': timingpointdataownercode,
+                         'timingpointcode': timingpointcode,
+                         'journeystoptype': journeystoptype}
+
+            item = pubsub.stanza.Item()
+            item['id'] = '%(dataownercode)s_%(lineplanningnumber)s_%(journeynumber)s_%(fortifyordersumber)s' % arguments
+            item['payload'] = KV8_DATEDPASSTIME % arguments
+            items.append(item)
+
+        return items
