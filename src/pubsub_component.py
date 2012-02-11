@@ -19,6 +19,9 @@ import sleekxmpp
 from sleekxmpp.componentxmpp import ComponentXMPP
 from sleekxmpp.exceptions import XMPPError
 from sleekxmpp.plugins.xep_0060.stanza.pubsub import Subscriptions
+from modality import modality
+
+from secret import component_server, component_port, component_jid, component_password
 
 # Python versions before 3.0 do not use UTF-8 encoding
 # by default. To ensure that Unicode is handled properly
@@ -65,31 +68,43 @@ class PubsubComponent(ComponentXMPP):
         self.pnick = 'openOV Transit Pubsub'
         
         self.modalities = { 
-                            'bus': bus(),
+                            'bus': modality('bus'),
                           # 'drive': drive(),
                           # 'taxi': taxi(),
                           # 'tram': tram(),
-                            'train': train(),
+                          #  'train': train(),
                           # 'walk': walk(),
                           # 'cycle': cycle()
                           }
  
     def _get_items(self, jid, node, data, disco, pubsub):
-        if node == 'passtimes':
-            # return all next departures
+        try:
+            firstpart = node.split('/', 2)[1]
+        except:
+            raise XMPPError(condition='item-not-found')
 
-        elif node in self.modalities.keys():
-            return self.modalities[node].get_items(jid, node, data, disco, pubsub)
+        if firstpart == 'passtimes':
+            pass
+
+        elif firstpart in self.modalities.keys():
+            return self.modalities[firstpart].get_items(jid, node, data, disco, pubsub)
     
         raise XMPPError(condition='item-not-found')
 
     def _disco_items_query(self, jid, node, data):
-        return _get_items(jid, node, data, self['xep_0030'], None)
+        return self._get_items(jid, node, data, self['xep_0030'], None)
     
-    def _pubsub_get_items(self, iq, jid, node):
-        return _get_items(jid, node, data, None, self['xep_0060'])  
+    def _pubsub_get_items(self, iq):
+    	jid = iq['from'].bare
+    	node = iq['pubsub']['items']['node']
+        
+        iq = self.makeIqResult(id=iq['id'], ifrom=iq['to'], ito=iq['from'])
+        iq['pubsub'].append(self._get_items(jid, node, iq, None, self['xep_0060']))
+        return iq.send(block=False)
 
-    def _pubsub_subscribe(self, iq, jid, node=None):
+    def _pubsub_subscribe(self, iq):
+    	jid = iq['subscribe']['jid'].full
+        node = iq['pubsub']['subscribe']['node']
         if node is not None:
             match = self._node_pattern.match(node)
             if match is not None:
@@ -103,7 +118,11 @@ class PubsubComponent(ComponentXMPP):
 
         raise XMPPError(condition='item-not-found')
 
-    def _pubsub_unsubscribe(self, iq, jid, node=None, subid=None):
+    def _pubsub_unsubscribe(self, iq):
+    	jid = iq['subscribe']['jid'].full
+        node = iq['pubsub']['subscribe']['node']
+        subid = iq['pubsub']['subscribe']['subid']
+
         param = [jid]
         query = "DELETE FROM subscriptions WHERE jid = ?"
 
@@ -123,7 +142,10 @@ class PubsubComponent(ComponentXMPP):
         iq_reply = self.makeIqResult(id=iq['id'], ifrom=iq['to'], ito=iq['from'])
         return iq_reply.send(block=False)
 
-    def _pubsub_retrieve_subscriptions(self, iq, jid, node=None):
+    def _pubsub_retrieve_subscriptions(self, iq):
+    	jid = iq['from'].bare
+        node = iq['pubsub']['subscriptions']['node']
+
         param = [jid + '%']
         query = "SELECT node, jid, 'subscribed', subid FROM subscriptions WHERE jid LIKE ?"
 
@@ -149,37 +171,29 @@ class PubsubComponent(ComponentXMPP):
         id_reply['pubsub'].append(subscriptions)
         return iq_reply.send(block=False)
 
-    def _pubsub_retrieve_affiliations(self, iq, jid, node=None):
+    def _pubsub_retrieve_affiliations(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_set_items(self, iq, jid, node):
+    def _pubsub_set_items(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_create_node(self, iq, jid, node):
+    def _pubsub_create_node(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_delete_node(self, iq, jid, node):
+    def _pubsub_delete_node(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_retract(self, iq, jid, node):
+    def _pubsub_retract(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
-    def _pubsub_get_config_node(self, iq, jid, node):
+    def _pubsub_get_config_node(self, iq):
         raise XMPPError(condition='feature-not-implemented')
 
     def cache_service_discovery(self, jid):
         self['xep_0030'].add_item(jid=jid, name='Any', node='', subnode='*')
-        for subnode, modality in modalities.items():
+        for subnode, modality in self.modalities.items():
             modality.cache_service_discovery(self['xep_0030'], jid)
             self['xep_0030'].add_item(jid=jid, name=modality.name, node='', subnode=subnode)
-
-        for code, station in self.stations.stations.items():
-            self['xep_0030'].add_item(jid=jid, name=station.name, node='stations', subnode='stations/%s'%(code))
-            self['xep_0030'].add_item(jid=jid, name='Actuele Vertrektijden', node='stations/%s'%(code), subnode='stations/%s/avt'%(code))
-            self['xep_0030'].add_item(jid=jid, name='Voorzieningen', node='stations/%s'%(code), subnode='stations/%s/vz'%(code))
-            self['xep_0030'].add_item(jid=jid, name='Storingen en Werkzaamheden', node='stations/%s'%(code), subnode='stations/%s/storingen'%(code))
-            self['xep_0030'].add_item(jid=jid, name='Actuele Storingen en Werkzaamheden', node='stations/%s/storingen'%(code), subnode='stations/%s/storingen/actueel'%(code))
-            self['xep_0030'].add_item(jid=jid, name='Geplande Storingen en Werkzaamheden', node='stations/%s/storingen'%(code), subnode='stations/%s/storingen/gepland'%(code))
 
     def start(self, event):
         """
@@ -195,7 +209,7 @@ class PubsubComponent(ComponentXMPP):
                      data.
         """
         self.cache_service_discovery(self.boundjid.bare)
-        self['xep_0030'].set_node_handler('disco_items_query', self.boundjid.bare, handler=self._get_items30)
+        self['xep_0030'].set_node_handler('disco_items_query', self.boundjid.bare, handler=self._disco_items_query)
         return
 
 
@@ -214,26 +228,7 @@ if __name__ == '__main__':
                     action='store_const', dest='loglevel',
                     const=5, default=logging.INFO)
 
-    # JID and password options.
-    optp.add_option("-j", "--jid", dest="jid",
-                    help="JID to use")
-    optp.add_option("-p", "--password", dest="password",
-                    help="password to use")
-    optp.add_option("-s", "--server", dest="server",
-                    help="server to connect to")
-    optp.add_option("-P", "--port", dest="port",
-                    help="port to connect to")
-
     opts, args = optp.parse_args()
-
-    if opts.jid is None:
-        opts.jid = raw_input("Component JID: ")
-    if opts.password is None:
-        opts.password = getpass.getpass("Password: ")
-    if opts.server is None:
-        opts.server = raw_input("Server: ")
-    if opts.port is None:
-        opts.port = int(raw_input("Port: "))
 
     # Setup logging.
     logging.basicConfig(level=opts.loglevel,
@@ -242,7 +237,7 @@ if __name__ == '__main__':
     # Setup the PubsubComponent and register plugins. Note that while plugins
     # may have interdependencies, the order in which you register them does
     # not matter.
-    xmpp = PubsubComponent(opts.jid, opts.password, opts.server, opts.port)
+    xmpp = PubsubComponent(component_jid, component_password, component_server, component_port)
     xmpp.registerPlugin('xep_0030') # Service Discovery
     xmpp.registerPlugin('xep_0060') # PubSub
 
