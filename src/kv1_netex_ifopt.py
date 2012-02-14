@@ -47,7 +47,7 @@ def netex_quay(arguments):
     return xml_quay % arguments
 
 def netex_stopplace(arguments):
-    xml_stopplace = """      <netex:StopPlace xmlns="http://www.ifopt.org.uk/ifopt" id="openOV:%(stopplaceid)s" modification="new" status="active" version="1.0">
+    xml_stopplace = """      <netex:StopPlace xmlns:netex="http://www.netex.org.uk/netex" xmlns="http://www.ifopt.org.uk/ifopt" id="%(stopplaceid)s" modification="new" status="active" version="1.0">
         <netex:Name>%(name)s</netex:Name>
         <netex:Description>%(description)s</netex:Description>
         <netex:StopPlaceType>%(stopplacetype)s</netex:StopPlaceType>

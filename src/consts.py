@@ -81,6 +81,10 @@ KV8_DATEDPASSTIME="""<tmi8:DATEDPASSTIME xmlns:tmi8="http://bison.connekt.nl/tmi
     <tmi8:journeystoptype>%(journeystoptype)s</tmi8:journeystoptype>
 </tmi8:DATEDPASSTIME>"""
 
+KV1_NEAREST_STOPPLACE_DISCO_SQL="""SELECT stopplaces.id, stopplaces.name FROM quays, stopplaces WHERE stopplaces.id = stopplace ORDER BY (((x - (%(x)d))*(x - (%(x)d)))+((y - (%(y)d))*(y - (%(y)d)))) LIMIT %(maxitems)d;"""
+
 KV1_NEAREST_USERSTOP_DISCO_SQL="""SELECT town, userstopareacode, pointcode, name FROM point, usrstop WHERE point.pointcode = usrstop.userstopcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - (%(x)d))*(locationx_ew - (%(x)d)))+((locationy_ns - (%(y)d))*(locationy_ns - (%(y)d)))) LIMIT %(maxitems)d;"""
 
 KV1_NEAREST_USERSTOP_GET_ITEMS_SQL="""SELECT usrstop.dataownercode, usrstop.userstopareacode, usrstar.name, usrstar.town, usrstar.description, usrstop.userstopcode, usrstop.name, usrstop.town, usrstop.description, usrstop.getin, usrstop.getout, point.locationx_ew, point.locationy_ns, point.locationz FROM point, usrstop LEFT JOIN usrstar ON usrstop.dataownercode = usrstar.dataownercode AND usrstop.userstopareacode = usrstar.userstopareacode WHERE usrstop.dataownercode = point.dataownercode AND usrstop.userstopcode = point.pointcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - (%(x)d))*(locationx_ew - (%(x)d)))+((locationy_ns - (%(y)d))*(locationy_ns - (%(y)d)))), usrstop.userstopareacode DESC, usrstop.town, usrstop.name, usrstop.userstopcode LIMIT %(maxitems)d;"""
+
+KV1_STOPPLACE_QUAYS_SQL="""SELECT sp.id, sp.name, sp.description, sp.stopplacetype, sp.street, sp.town, sp.postalregion, q.dataownercode, q.publiccode, q.name, q.transportmode, q.longitude, q.latitude, q.altitude, q.x, q.y, q.description, q.boardinguse, q.aligtinguse, q.quaytype FROM stopplaces AS sp, quays AS q WHERE sp.id = %(stoparea)s AND sp.id = q.stopplace;"""

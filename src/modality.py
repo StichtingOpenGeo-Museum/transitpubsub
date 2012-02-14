@@ -1,9 +1,9 @@
 import re
 from datetime import datetime, timedelta, date
-from consts import KV1_SQL, KV8_DATEDPASSTIME, WEEKDAYS, KV1_NEAREST_USERSTOP_DISCO_SQL, KV1_NEAREST_USERSTOP_GET_ITEMS_SQL
+from consts import KV1_SQL, KV8_DATEDPASSTIME, WEEKDAYS, KV1_NEAREST_USERSTOP_DISCO_SQL, KV1_NEAREST_USERSTOP_GET_ITEMS_SQL, KV1_NEAREST_STOPPLACE_DISCO_SQL, KV1_STOPPLACE_QUAYS_SQL
 from sleekxmpp.exceptions import XMPPError
 from sleekxmpp.plugins.xep_0030 import DiscoItems
-from kv1_netex_ifopt import netex_quay, modality_stopplace, modality_quay, modality_quaytype
+from kv1_netex_ifopt import netex_stopplace, netex_quay, modality_stopplace, modality_quay, modality_quaytype
 
 import monetdb.sql
 from secret import sql_username, sql_password, sql_hostname, sql_port, sql_database
@@ -48,16 +48,23 @@ class modality:
 
     def get_items(self, jid, node, data, disco=None, pubsub=None):
         latlon = self.validnode_latlon.match(node)
+        print node
         if latlon is not None:
             lat = latlon.group(1)
             lon = latlon.group(2)
             what = latlon.group(3)
+            
+            x, y = wgs84_rd(lat, lon)
             if what == 'quays':
-                x, y = wgs84_rd(lat, lon)
                 if disco is not None:
                     return self.nearestuserstop_disco(disco, jid, node, x, y)
                 elif pubsub is not None:
                     return self.nearestuserstop_get_items(pubsub, jid, node, x, y)
+            elif what == 'stopplaces':
+                if disco is not None:
+                    return self.neareststopplace_disco(disco, jid, node, x, y)
+                elif pubsub is not None:
+                    return self.neareststopplace_get_items(pubsub, jid, node, x, y)
 
         else:
             if disco is not None:
@@ -67,8 +74,15 @@ class modality:
                 print node
                 match = self.validnode.match(node)
                 if match is not None:
+                    print 'match=>', match.group(0)
                     if match.group(11) is not None:
                         return self.passtimes(pubsub, match.group(3), match.group(6), match.group(9))
+                    elif match.group(9) is not None and match.group(9) != '':
+                        print match.group(9)
+                        return self.quay(pubsub, node, match.group(3), match.group(6), match.group(9))
+                    elif match.group(6) is not None and match.group(6) != '':
+                        return self.stopplace(pubsub, node, match.group(3), match.group(6))
+                        
 
         raise XMPPError(condition='item-not-found') 
 
@@ -97,7 +111,22 @@ class modality:
         for town, userstopareacode, pointcode, name in cursor.fetchall():
             if userstopareacode is None:
                 userstopareacode = '*'
-            result.add_item(jid, node='/%s/postalregion/%s/stopplace/%s/quay/%s' % (self.modality, town, userstopareacode, pointcode), name=name)
+            postalregion = '*'
+            result.add_item(jid, node='/%s/postalregion/%s/stopplace/%s/quay/%s' % (self.name, postalregion, userstopareacode, pointcode), name=name)
+
+        return result
+    
+    def neareststopplace_disco(self, disco, jid, node, x, y):
+        sql = KV1_NEAREST_STOPPLACE_DISCO_SQL % {'x': x, 'y': y, 'maxitems': 10}
+        cursor = self.connection.cursor()
+        cursor.execute(sql)
+
+        result = disco.stanza.DiscoItems()
+        result['node'] = node
+
+        for stopplaceid, stopplacename in cursor.fetchall():
+            postalregion = '*'
+            result.add_item(jid, node='/%s/postalregion/%s/stopplace/%s' % (self.name, postalregion, stopplaceid), name=stopplacename)
 
         return result
 
@@ -121,6 +150,26 @@ class modality:
 
             items.append(item)
 
+        return items
+
+    def stopplace(self, pubsub, node, town, stoparea):
+        cursor = self.connection.cursor()
+        cursor.execute(KV1_STOPPLACE_QUAYS_SQL, {'stoparea': stoparea})
+
+        quays = ''
+
+        items = pubsub.stanza.Items()
+        items['node'] = node
+        item = pubsub.stanza.Item()
+
+        for sp_id, sp_name, sp_description, sp_type, sp_street, sp_town, sp_postalregion, q_dataownercode, q_publiccode, q_name, q_transportmode, q_longitude, q_latitude, q_altitude, q_x, q_y, q_description, q_boardinguse, q_aligtinguse, q_type in cursor.fetchall():
+            quay_arguments = {'dataownercode': q_dataownercode, 'publiccode': q_publiccode, 'name': q_name, 'transportmode': q_transportmode, 'x': q_x, 'y': q_y, 'altitude': q_altitude, 'boardinguse': str(q_boardinguse).lower(), 'alightinguse': str(q_aligtinguse).lower(), 'quaytype': q_type, 'description': q_description}
+            quays += netex_quay(quay_arguments)
+
+        # TODO, a lot of things, like clean up but also escape for XML
+        stopplace_arguments = { 'stopplaceid': sp_id, 'name': sp_name, 'town': sp_town, 'description': sp_description, 'stopplacetype': sp_type, 'street': sp_street, 'postalregion': sp_postalregion, 'quays': quays }
+        item['payload'] = ET.XML(netex_stopplace(stopplace_arguments))
+        items.append(item)
         return items
 
     def passtimes(self, pubsub, town, stoparea, quay, querydatetime=None):

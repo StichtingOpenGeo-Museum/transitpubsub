@@ -88,7 +88,7 @@ class PubsubComponent(ComponentXMPP):
 
         elif firstpart in self.modalities.keys():
             return self.modalities[firstpart].get_items(jid, node, data, disco, pubsub)
-    
+   
         raise XMPPError(condition='item-not-found')
 
     def _disco_items_query(self, jid, node, data):
@@ -209,7 +209,7 @@ class PubsubComponent(ComponentXMPP):
                      data.
         """
         self.cache_service_discovery(self.boundjid.bare)
-        self['xep_0030'].set_node_handler('disco_items_query', self.boundjid.bare, handler=self._disco_items_query)
+        self['xep_0030'].set_node_handler('get_items', self.boundjid.bare, handler=self._disco_items_query)
         return
 
 
