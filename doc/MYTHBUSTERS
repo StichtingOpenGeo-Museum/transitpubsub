@@ -1,0 +1,211 @@
+Materialising JOPATILI to a isTimingstop cache is faster than searching in the huge JOPATILI table.
+
+BUSTED. Although the isTimingstop cache would have only 1169 rows for the total 61631 rows present in the JOPATILI table. It still doesn't help to increase performance.
+
+select count(*) from jopatili where istimingstop = true and timinglinkorder > 1; # bigger than one is used here because of a stupidity in the data
++------+
+| L1   |
++======+
+| 1169 |
++------+
+CREATE TABLE "sys"."cache_timingstop" (
+        "dataownercode"      VARCHAR(10)   NOT NULL,
+        "lineplanningnumber" VARCHAR(10)   NOT NULL,
+        "journeypatterncode" VARCHAR(10)   NOT NULL,
+        "timinglinkorder"    DECIMAL(3)    NOT NULL
+);
+insert into cache_timingstop select dataownercode, lineplanningnumber, journeypatterncode, timinglinkorder from jopatili where istimingstop = true and timinglinkorder > 1;
+
+select count(*) from pujo as p, cache_timingstop as j, jopatili as j1, jopatili as j2 where
+p.dataownercode = j.dataownercode and
+p.lineplanningnumber = j.lineplanningnumber and
+p.journeypatterncode = j.journeypatterncode and
+j.dataownercode = j1.dataownercode and
+j.lineplanningnumber = j1.lineplanningnumber and
+j.journeypatterncode = j1.journeypatterncode and
+j.dataownercode = j2.dataownercode and
+j.lineplanningnumber = j2.lineplanningnumber and
+j.journeypatterncode = j2.journeypatterncode and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
++------+
+| L1   |
++======+
+|    0 |
++------+
+1 tuple (21.795ms)
+
+select count(*) from pujo as p, jopatili as j, jopatili as j1, jopatili as j2 where
+p.dataownercode = j.dataownercode and
+p.lineplanningnumber = j.lineplanningnumber and
+p.journeypatterncode = j.journeypatterncode and
+j.dataownercode = j1.dataownercode and
+j.lineplanningnumber = j1.lineplanningnumber and
+j.journeypatterncode = j1.journeypatterncode and
+j.dataownercode = j2.dataownercode and
+j.lineplanningnumber = j2.lineplanningnumber and
+j.journeypatterncode = j2.journeypatterncode and
+j.istimingstop = true and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
++------+
+| L1   |
++======+
+|    0 |
++------+
+1 tuple (20.855ms)
+
+
+
+
+
+Optimising JOPATILI table for a specific day really helps a lot.
+
+BUSTED. The JOPATILI table only shrinks only by 50%.
+
+select count(*) from (select distinct j.* from pujo as p, jopatili as j where p.dataownercode = j.dataownercode and p.lineplanningnumber = j.lineplanningnumber and p.journeypatterncode = j.journeypatterncode and p.daytype = 64) as x;
++-------+
+| L1    |
++=======+
+| 36112 |
++-------+
+1 tuple (2.1s)
+
+select count(*) from jopatili;   
++-------+
+| L1    |
++=======+
+| 61631 |
++-------+
+1 tuple (1.716ms)
+
+
+
+Optimising JOPATILI using a single column to join on helps a lot.
+
+PLAUSIBLE. It gets you back from 20ms to 16ms max. Using *only* the optimisation on JOPATILI.
+Doing the same with PUJO, virtually improves nothing, 1ms give or take. But applying the single key strategy to the cache. We end up at a minimum of 13ms.
+
+alter table jopatili add column doc_lpn_jpc varchar(32);
+update jopatili set doc_lpn_jpc = dataownercode||'_'||lineplanningnumber||'_'||journeypatterncode;
+
+select count(*) from pujo as p, jopatili as j, jopatili as j1, jopatili as j2 where
+p.dataownercode = j.dataownercode and
+p.lineplanningnumber = j.lineplanningnumber and
+p.journeypatterncode = j.journeypatterncode and
+j.doc_lpn_jpc = j1.doc_lpn_jpc and
+j.doc_lpn_jpc = j2.doc_lpn_jpc and
+j.istimingstop = true and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
++------+
+| L1   |
++======+
+|    0 |
++------+
+1 tuple (16.713ms)
+
+alter table pujo add column doc_lpn_jpc varchar(32);
+update pujo set doc_lpn_jpc = dataownercode||'_'||lineplanningnumber||'_'||journeypatterncode;
+
+select count(*) from pujo as p, jopatili as j, jopatili as j1, jopatili as j2 where
+j.doc_lpn_jpc = p.doc_lpn_jpc and
+j.doc_lpn_jpc = j1.doc_lpn_jpc and
+j.doc_lpn_jpc = j2.doc_lpn_jpc and
+j.istimingstop = true and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
+
+Performance observed: 15-18ms.
+
+alter table cache_timingstop add column doc_lpn_jpc varchar(32);
+update cache_timingstop set doc_lpn_jpc = dataownercode||'_'||lineplanningnumber||'_'||journeypatterncode;
+
+select count(*) from pujo as p, cache_timingstop as j, jopatili as j1, jopatili as j2 where
+j.doc_lpn_jpc = p.doc_lpn_jpc and
+j.doc_lpn_jpc = j1.doc_lpn_jpc and
+j.doc_lpn_jpc = j2.doc_lpn_jpc and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
+
+Performance observed: 13-16ms;
+
+
+Going read-only on MonetDB really helps.
+
+CONFIRMED. Lets check our worst and best case:
+
+sql>select count(*) from pujo as p, jopatili as j, jopatili as j1, jopatili as j2 where
+p.dataownercode = j.dataownercode and
+p.lineplanningnumber = j.lineplanningnumber and
+p.journeypatterncode = j.journeypatterncode and
+j.dataownercode = j1.dataownercode and
+j.lineplanningnumber = j1.lineplanningnumber and
+j.journeypatterncode = j1.journeypatterncode and
+j.dataownercode = j2.dataownercode and
+j.lineplanningnumber = j2.lineplanningnumber and
+j.journeypatterncode = j2.journeypatterncode and
+j.istimingstop = true and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
++------+
+| L1   |
++======+
+|    0 |
++------+
+1 tuple (20.893ms)
+
+sql>select count(*) from pujo as p, cache_timingstop as j, jopatili as j1, jopatili as j2 where
+j.doc_lpn_jpc = p.doc_lpn_jpc and
+j.doc_lpn_jpc = j1.doc_lpn_jpc and
+j.doc_lpn_jpc = j2.doc_lpn_jpc and
+p.dataownercode = 'CXX' and
+p.lineplanningnumber = 'B141' and
+p.daytype = 64 and
+p.journeynumber = 4001 and
+j.timinglinkorder >= j1.timinglinkorder and
+j.timinglinkorder <= j2.timinglinkorder and
+j1.userstopcodebegin = '59542170' and
+j2.userstopcodebegin = '59442050';
++------+
+| L1   |
++======+
+|    0 |
++------+
+1 tuple (11.935ms)
