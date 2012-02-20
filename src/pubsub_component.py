@@ -43,6 +43,8 @@ class PubsubComponent(ComponentXMPP):
     def __init__(self, jid, secret, server, port):
         ComponentXMPP.__init__(self, jid, secret, server, port)
 
+        self.use_signals()
+
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
         # and the XML streams are ready for use. We want to

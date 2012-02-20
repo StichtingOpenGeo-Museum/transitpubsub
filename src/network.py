@@ -1,5 +1,5 @@
 import monetdb.sql
-from datetime import date
+from datetime import date, datetime, timedelta
 from secret import sql_username, sql_password, sql_hostname, sql_port, sql_database
 
 class network:
@@ -7,7 +7,8 @@ class network:
         self.journeys = {}
         self.network = {}
         self.timingstops = {}
-        self._cache_journeys()
+        self._cache_journeys(date.today())
+#        self._cache_journeys(date.today() + timedelta(days=-1))
         self._cache_network()
 
     def _cache_network(self):
@@ -27,38 +28,49 @@ class network:
                 else:
                     self.timingstops[index] = set([timinglinkorder])
 
-    def _cache_journeys(self, operatingdate=None):
-        if operatingdate is None:
-            operatingdate = date.today()
+    def _cache_journeys(self, operatingday=None):
+        if operatingday is None:
+            operatingday = date.today()
 
-        sql = """SELECT pujo.dataownercode, pujo.lineplanningnumber, pujo.journeynumber, pujo.journeypatterncode FROM pujo, tive, pegrval WHERE pujo.daytype = power(2, (dayofweek(CAST(%(operatingdate)s AS date)) - 1)) AND %(operatingdate)s BETWEEN pegrval.validfrom AND pegrval.validthru AND tive.dataownercode = pegrval.dataownercode AND tive.organizationalunitcode = pegrval.organizationalunitcode AND tive.periodgroupcode = pegrval.periodgroupcode AND pujo.timetableversioncode = tive.timetableversioncode AND pujo.organizationalunitcode = tive.organizationalunitcode AND pujo.periodgroupcode = tive.periodgroupcode;"""
+        sql = """SELECT pujo.dataownercode, pujo.lineplanningnumber, pujo.journeynumber, pujo.journeypatterncode FROM pujo, tive, pegrval WHERE bit_and(pujo.daytype, %(weekday)s) = %(weekday)s AND %(operatingday)s BETWEEN pegrval.validfrom AND pegrval.validthru AND tive.dataownercode = pegrval.dataownercode AND tive.organizationalunitcode = pegrval.organizationalunitcode AND tive.periodgroupcode = pegrval.periodgroupcode AND pujo.timetableversioncode = tive.timetableversioncode AND pujo.organizationalunitcode = tive.organizationalunitcode AND pujo.periodgroupcode = tive.periodgroupcode;"""
     
         connection = monetdb.sql.connect(username=sql_username, password=sql_password, hostname=sql_hostname, port=sql_port, database=sql_database, autocommit=True)
         cursor = connection.cursor()
-        cursor.execute(sql, {'operatingdate': operatingdate})
+        cursor.execute(sql, {'operatingday': operatingday, 'weekday': 2 ** ((operatingday.weekday() + 1) % 7)})
+
+        if str(operatingday) not in self.journeys:
+            self.journeys[str(operatingday)] = {}
 
         for dataownercode, lineplanningnumber, journeynumber, journeypatterncode in cursor.fetchall():
             index = '_'.join([str(dataownercode), str(lineplanningnumber), str(journeynumber)])
-            self.journeys[index] = journeypatterncode
+            self.journeys[str(operatingday)][index] = journeypatterncode
 
-    def journeypatterncode(self, doc_lpn_jn):
+    def journeypatterncode(self, operatingday, doc_lpn_jn):
         try:
-            return self.journeys[doc_lpn_jn]
+            return self.journeys[operatingday][doc_lpn_jn]
         except:
             return None
 
-    def passed(self, doc_lpn_jpc, userstoprequest, userstopactual):
-        try:
-            userstoprequest_tp = self.network[doc_lpn_jpc+'_'+userstoprequest]
-            userstopactual_tp = self.network[doc_lpn_jpc+'_'+userstopactual]
-        except:
-            return None
+    def passed(self, dataownercode, lineplanningnumber, journeynumber, operatingday, userstopactual, userstoprequest):
+        journeypatterncode = self.journeypatterncode(operatingday, dataownercode + '_' + lineplanningnumber + '_' + journeynumber)
+        print dataownercode + '_' + lineplanningnumber + '_' + journeynumber
+        print journeypatterncode
+        if journeypatterncode is None:
+            return None, None
 
-        result = userstoprequest_tp > userstopactual_tp
+        doc_lpn_jpc = dataownercode + '_' + lineplanningnumber + '_' + journeypatterncode
+        print doc_lpn_jpc
+        try:
+            userstoprequest_tp = self.network[doc_lpn_jpc + '_' + userstoprequest]
+            userstopactual_tp = self.network[doc_lpn_jpc + '_' + userstopactual]
+        except:
+            return None, None
+
+        result = userstoprequest_tp < userstopactual_tp
         if result:
-            return True, None
+            return result, None
         else:
-            return False, self.timingstop(doc_lpn_jpc, userstoprequest_tp, userstopactual_tp)
+            return result, self.timingstop(doc_lpn_jpc, userstoprequest_tp, userstopactual_tp)
 
     def timingstop(self, doc_lpn_jpc, userstoprequest_tp, userstopactual_tp):
         if doc_lpn_jpc in self.network:

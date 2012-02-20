@@ -1,9 +1,14 @@
 ZMQ_SERVER_NSAPI="tcp://127.0.0.1:6040"
 ZMQ_PUBSUB_NSAPI="tcp://127.0.0.1:6041"
 
-WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+ZMQ_PUBSUB_KV6="tcp://127.0.0.1:6006"
+ZMQ_PUBSUB_KV17="tcp://127.0.0.1:6017"
+ZMQ_SERVER_NETWORK="tcp://127.0.0.1:6050"
+ZMQ_SERVER_PUNCTUALITY="tcp://127.0.0.1:6051"
 
 KV1_SUM_TOTALTIME="""select max(total) from (select sum(totaldrivetime) as total from timdemrnt group by dataownercode, lineplanningnumber, journeypatterncode, timedemandgroupcode) as x;"""
+
+# bit_and(cache_kv1_3.daytype, cast(power(2, dayofweek(cast('%(operatingday)s' as date))) as smallint)) = power(2, cast(dayofweek(cast('%(operatingday)s' as date)) as smallint))
 
 KV1_SQL="""
 select 
@@ -17,12 +22,13 @@ cache_kv1.linepublicnumber AS linepublicnumber,
 cache_kv1.direction AS linedirection,
 jopatili.destcode AS destinationcode,
 dest.destnamefull AS destinationname50,
+dest.destnamedetail AS destinationdetail24,
 jopatili.istimingstop AS istimingstop,
 cache_kv1_3.departuretime + cache_kv1_2.totaldrivetime AS passtime,
 cache_kv1.userstopcodebegin = userstopcode as first,
 cache_kv1.userstopcodeend = userstopcode as last,
 cache_kv1_3.wheelchairaccessible as wheelchairaccessible
-from cache_kv1_3, cache_kv1, timdemrnt AS fromhere, timdemrnt, usrstop AS usrstopbegin, jopatili, cache_kv1_2, dest where
+from cache_kv1_3, cache_kv1, timdemrnt, usrstop AS usrstopbegin, jopatili, cache_kv1_2, dest where
 dest.dataownercode = jopatili.dataownercode AND
 dest.destcode = jopatili.destcode AND
 cache_kv1_3.dataownercode = timdemrnt.dataownercode AND
@@ -40,19 +46,64 @@ cache_kv1_2.timedemandgroupcode = timdemrnt.timedemandgroupcode AND
 cache_kv1_2.timinglinkorder = timdemrnt.timinglinkorder AND
 timdemrnt.dataownercode = usrstopbegin.dataownercode AND
 timdemrnt.userstopcodebegin = usrstopbegin.userstopcode AND
-cache_kv1_3.dataownercode = fromhere.dataownercode AND
-cache_kv1_3.lineplanningnumber = fromhere.lineplanningnumber AND
-cache_kv1_3.journeypatterncode = fromhere.journeypatterncode AND
-cache_kv1_3.timedemandgroupcode = fromhere.timedemandgroupcode AND
 cache_kv1_3.dataownercode = cache_kv1.dataownercode AND
 cache_kv1_3.lineplanningnumber = cache_kv1.lineplanningnumber AND
 cache_kv1_3.timedemandgroupcode = cache_kv1.timedemandgroupcode AND
 cache_kv1_3.journeypatterncode = cache_kv1.journeypatterncode AND
-cache_kv1_3.daytype%(weekday)s = true and '%(operatingday)s' BETWEEN cache_kv1_3.validfrom AND cache_kv1_3.validthru AND
-cache_kv1_3.departuretime BETWEEN cast('%(from)s' AS TIMESTAMP) - interval '7680' second and cast('%(from)s' AS TIMESTAMP) + interval '7680' second AND
-fromhere.userstopcodebegin = '%(userstop)s' AND
-timdemrnt.userstopcodebegin = '%(userstop)s' AND
-(cache_kv1_3.departuretime + cache_kv1_2.totaldrivetime) >= cast('%(from)s' AS TIMESTAMP) order by passtime limit %(maxresults)d;"""
+bit_and(cache_kv1_3.daytype, %(weekday)s) = %(weekday)s AND
+%(operatingday)s BETWEEN cache_kv1_3.validfrom AND cache_kv1_3.validthru AND
+cache_kv1_3.departuretime BETWEEN cast(%(from)s AS TIMESTAMP) - interval '7680' second AND cast(%(from)s AS TIMESTAMP) + interval '7680' second AND
+timdemrnt.userstopcodebegin = %(userstop)s AND
+(cache_kv1_3.departuretime + cache_kv1_2.totaldrivetime) >= cast(%(from)s AS TIMESTAMP) order by passtime limit %(maxresults)s;"""
+
+KV1_SQL_STOPPLACE="""
+select 
+cache_kv1_3.dataownercode AS dataownercode,
+cache_kv1_3.lineplanningnumber AS lineplanningnumber,
+cache_kv1_3.journeynumber AS journeynumber,
+cache_kv1_3.journeypatterncode AS localservicelevelcode,
+timdemrnt.timinglinkorder AS userstopordernumber,
+timdemrnt.userstopcodebegin AS userstopcode,
+cache_kv1.linepublicnumber AS linepublicnumber,
+cache_kv1.direction AS linedirection,
+jopatili.destcode AS destinationcode,
+dest.destnamefull AS destinationname50,
+dest.destnamedetail AS destinationdetail24,
+jopatili.istimingstop AS istimingstop,
+cache_kv1_3.departuretime + cache_kv1_2.totaldrivetime AS passtime,
+cache_kv1.userstopcodebegin = userstopcode as first,
+cache_kv1.userstopcodeend = userstopcode as last,
+cache_kv1_3.wheelchairaccessible as wheelchairaccessible
+from cache_kv1_3, cache_kv1, timdemrnt, usrstop AS usrstopbegin, jopatili, cache_kv1_2, dest, quays where
+dest.dataownercode = jopatili.dataownercode AND
+dest.destcode = jopatili.destcode AND
+cache_kv1_3.dataownercode = timdemrnt.dataownercode AND
+cache_kv1_3.lineplanningnumber = timdemrnt.lineplanningnumber AND
+cache_kv1_3.journeypatterncode = timdemrnt.journeypatterncode AND
+cache_kv1_3.timedemandgroupcode = timdemrnt.timedemandgroupcode AND
+jopatili.dataownercode = timdemrnt.dataownercode AND
+jopatili.lineplanningnumber = timdemrnt.lineplanningnumber AND
+jopatili.journeypatterncode = timdemrnt.journeypatterncode AND
+jopatili.timinglinkorder = timdemrnt.timinglinkorder AND
+cache_kv1_2.dataownercode = timdemrnt.dataownercode AND
+cache_kv1_2.lineplanningnumber = timdemrnt.lineplanningnumber AND
+cache_kv1_2.journeypatterncode = timdemrnt.journeypatterncode AND
+cache_kv1_2.timedemandgroupcode = timdemrnt.timedemandgroupcode AND
+cache_kv1_2.timinglinkorder = timdemrnt.timinglinkorder AND
+timdemrnt.dataownercode = usrstopbegin.dataownercode AND
+timdemrnt.userstopcodebegin = usrstopbegin.userstopcode AND
+cache_kv1_3.dataownercode = cache_kv1.dataownercode AND
+cache_kv1_3.lineplanningnumber = cache_kv1.lineplanningnumber AND
+cache_kv1_3.timedemandgroupcode = cache_kv1.timedemandgroupcode AND
+cache_kv1_3.journeypatterncode = cache_kv1.journeypatterncode AND
+bit_and(cache_kv1_3.daytype, %(weekday)s) = %(weekday)s AND
+%(operatingday)s BETWEEN cache_kv1_3.validfrom AND cache_kv1_3.validthru AND
+cache_kv1_3.departuretime BETWEEN cast(%(from)s AS TIMESTAMP) - interval '7680' second and cast(%(from)s AS TIMESTAMP) + interval '7680' second AND
+timdemrnt.userstopcodebegin = quays.publiccode AND
+quays.dataownercode = timdemrnt.dataownercode AND
+quays.stopplace = %(stopplace)s AND
+(cache_kv1_3.departuretime + cache_kv1_2.totaldrivetime) >= cast(%(from)s AS TIMESTAMP) order by passtime limit %(maxresults)s;"""
+
 
 KV8_DATEDPASSTIME="""<tmi8:DATEDPASSTIME xmlns:tmi8="http://bison.connekt.nl/tmi8/kv7kv8/msg">
     <tmi8:dataownercode>%(dataownercode)s</tmi8:dataownercode>
@@ -68,6 +119,7 @@ KV8_DATEDPASSTIME="""<tmi8:DATEDPASSTIME xmlns:tmi8="http://bison.connekt.nl/tmi
     <tmi8:lastupdatetimestamp>%(lastupdatetimestamp)s</tmi8:lastupdatetimestamp>
     <tmi8:destinationcode>%(destinationcode)s</tmi8:destinationcode>
     <tmi8:destinationname50>%(destinationname50)s</tmi8:destinationname50>
+    <tmi8:destinationdetail24>%(destinationdetail24)s</tmi8:destinationdetail24>
     <tmi8:istimingstop>%(istimingpoint)s</tmi8:istimingstop>
     <tmi8:expectedarrivaltime>%(expectedarrivaltime)s</tmi8:expectedarrivaltime>
     <tmi8:targetarrivaltime>%(targetarrivaltime)s</tmi8:targetarrivaltime>
@@ -81,10 +133,10 @@ KV8_DATEDPASSTIME="""<tmi8:DATEDPASSTIME xmlns:tmi8="http://bison.connekt.nl/tmi
     <tmi8:journeystoptype>%(journeystoptype)s</tmi8:journeystoptype>
 </tmi8:DATEDPASSTIME>"""
 
-KV1_NEAREST_STOPPLACE_DISCO_SQL="""SELECT stopplaces.id, stopplaces.name FROM quays, stopplaces WHERE stopplaces.id = stopplace ORDER BY (((x - (%(x)d))*(x - (%(x)d)))+((y - (%(y)d))*(y - (%(y)d)))) LIMIT %(maxitems)d;"""
+KV1_NEAREST_STOPPLACE_DISCO_SQL="""SELECT stopplaces.id, stopplaces.name FROM quays, stopplaces WHERE stopplaces.id = stopplace ORDER BY (((x - %(x)s)*(x - %(x)s))+((y - %(y)s)*(y - %(y)s))) LIMIT %(maxitems)s;"""
 
-KV1_NEAREST_USERSTOP_DISCO_SQL="""SELECT town, userstopareacode, pointcode, name FROM point, usrstop WHERE point.pointcode = usrstop.userstopcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - (%(x)d))*(locationx_ew - (%(x)d)))+((locationy_ns - (%(y)d))*(locationy_ns - (%(y)d)))) LIMIT %(maxitems)d;"""
+KV1_NEAREST_USERSTOP_DISCO_SQL="""SELECT town, userstopareacode, pointcode, name FROM point, usrstop WHERE point.pointcode = usrstop.userstopcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - %(x)s)*(locationx_ew - %(x)s))+((locationy_ns - %(y)s)*(locationy_ns - %(y)s))) LIMIT %(maxitems)s;"""
 
-KV1_NEAREST_USERSTOP_GET_ITEMS_SQL="""SELECT usrstop.dataownercode, usrstop.userstopareacode, usrstar.name, usrstar.town, usrstar.description, usrstop.userstopcode, usrstop.name, usrstop.town, usrstop.description, usrstop.getin, usrstop.getout, point.locationx_ew, point.locationy_ns, point.locationz FROM point, usrstop LEFT JOIN usrstar ON usrstop.dataownercode = usrstar.dataownercode AND usrstop.userstopareacode = usrstar.userstopareacode WHERE usrstop.dataownercode = point.dataownercode AND usrstop.userstopcode = point.pointcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - (%(x)d))*(locationx_ew - (%(x)d)))+((locationy_ns - (%(y)d))*(locationy_ns - (%(y)d)))), usrstop.userstopareacode DESC, usrstop.town, usrstop.name, usrstop.userstopcode LIMIT %(maxitems)d;"""
+KV1_NEAREST_USERSTOP_GET_ITEMS_SQL="""SELECT usrstop.dataownercode, usrstop.userstopareacode, usrstar.name, usrstar.town, usrstar.description, usrstop.userstopcode, usrstop.name, usrstop.town, usrstop.description, usrstop.getin, usrstop.getout, point.locationx_ew, point.locationy_ns, point.locationz FROM point, usrstop LEFT JOIN usrstar ON usrstop.dataownercode = usrstar.dataownercode AND usrstop.userstopareacode = usrstar.userstopareacode WHERE usrstop.dataownercode = point.dataownercode AND usrstop.userstopcode = point.pointcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - (%(x)s))*(locationx_ew - (%(x)s)))+((locationy_ns - (%(y)s))*(locationy_ns - (%(y)s)))), usrstop.userstopareacode DESC, usrstop.town, usrstop.name, usrstop.userstopcode LIMIT %(maxitems)s;"""
 
 KV1_STOPPLACE_QUAYS_SQL="""SELECT sp.id, sp.name, sp.description, sp.stopplacetype, sp.street, sp.town, sp.postalregion, q.dataownercode, q.publiccode, q.name, q.transportmode, q.longitude, q.latitude, q.altitude, q.x, q.y, q.description, q.boardinguse, q.aligtinguse, q.quaytype FROM stopplaces AS sp, quays AS q WHERE sp.id = %(stoparea)s AND sp.id = q.stopplace;"""
