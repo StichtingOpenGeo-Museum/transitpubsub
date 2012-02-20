@@ -1,7 +1,7 @@
 import re
 import dateutil.parser
 from datetime import datetime, timedelta, date
-from consts import KV1_SQL, KV1_SQL_STOPPLACE, KV8_DATEDPASSTIME, KV1_NEAREST_USERSTOP_DISCO_SQL, KV1_NEAREST_USERSTOP_GET_ITEMS_SQL, KV1_NEAREST_STOPPLACE_DISCO_SQL, KV1_STOPPLACE_QUAYS_SQL, ZMQ_SERVER_PUNCTUALITY
+from consts import KV1_SQL, KV1_SQL_STOPPLACE, KV1_QUAY_SQL, KV8_DATEDPASSTIME, KV1_NEAREST_USERSTOP_DISCO_SQL, KV1_NEAREST_USERSTOP_GET_ITEMS_SQL, KV1_NEAREST_STOPPLACE_DISCO_SQL, KV1_STOPPLACE_QUAYS_SQL, ZMQ_SERVER_PUNCTUALITY
 from sleekxmpp.exceptions import XMPPError
 from sleekxmpp.plugins.xep_0030 import DiscoItems
 from kv1_netex_ifopt import netex_stopplace, netex_quay, modality_stopplace, modality_quay, modality_quaytype
@@ -184,6 +184,22 @@ class modality:
             # TODO, a lot of things, like clean up but also escape for XML
             stopplace_arguments = { 'stopplaceid': sp_id, 'name': sp_name, 'town': sp_town, 'description': sp_description, 'stopplacetype': sp_type, 'street': sp_street, 'postalregion': sp_postalregion, 'quays': quays }
             item['payload'] = ET.XML(netex_stopplace(stopplace_arguments))
+            items.append(item)
+
+        return items
+
+    def quay(self, pubsub, node, _town, _stoparea, quay):
+        items = pubsub.stanza.Items()
+        items['node'] = node
+
+        cursor = self.connection.cursor()
+        rows = cursor.execute(KV1_QUAY_SQL, {'quay': quay})
+        
+        if rows > 0:
+            q_dataownercode, q_publiccode, q_name, q_transportmode, q_longitude, q_latitude, q_altitude, q_x, q_y, q_description, q_boardinguse, q_aligtinguse, q_type = cursor.fetchone()
+            item = pubsub.stanza.Item()
+            quay_arguments = {'dataownercode': q_dataownercode, 'publiccode': q_publiccode, 'name': q_name, 'transportmode': q_transportmode, 'x': q_x, 'y': q_y, 'altitude': q_altitude, 'boardinguse': str(q_boardinguse).lower(), 'alightinguse': str(q_aligtinguse).lower(), 'quaytype': q_type, 'description': q_description}
+            item['payload'] = ET.XML(netex_quay(quay_arguments))
             items.append(item)
 
         return items

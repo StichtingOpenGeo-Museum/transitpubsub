@@ -104,7 +104,6 @@ quays.dataownercode = timdemrnt.dataownercode AND
 quays.stopplace = %(stopplace)s AND
 (cache_kv1_3.departuretime + cache_kv1_2.totaldrivetime) >= cast(%(from)s AS TIMESTAMP) order by passtime limit %(maxresults)s;"""
 
-
 KV8_DATEDPASSTIME="""<tmi8:DATEDPASSTIME xmlns:tmi8="http://bison.connekt.nl/tmi8/kv7kv8/msg">
     <tmi8:dataownercode>%(dataownercode)s</tmi8:dataownercode>
     <tmi8:operationdate>%(operationdate)s</tmi8:operationdate>
@@ -140,3 +139,5 @@ KV1_NEAREST_USERSTOP_DISCO_SQL="""SELECT town, userstopareacode, pointcode, name
 KV1_NEAREST_USERSTOP_GET_ITEMS_SQL="""SELECT usrstop.dataownercode, usrstop.userstopareacode, usrstar.name, usrstar.town, usrstar.description, usrstop.userstopcode, usrstop.name, usrstop.town, usrstop.description, usrstop.getin, usrstop.getout, point.locationx_ew, point.locationy_ns, point.locationz FROM point, usrstop LEFT JOIN usrstar ON usrstop.dataownercode = usrstar.dataownercode AND usrstop.userstopareacode = usrstar.userstopareacode WHERE usrstop.dataownercode = point.dataownercode AND usrstop.userstopcode = point.pointcode AND point.pointtype = 'SP' AND usrstop.userstoptype = 'PASSENGER' ORDER BY (((locationx_ew - (%(x)s))*(locationx_ew - (%(x)s)))+((locationy_ns - (%(y)s))*(locationy_ns - (%(y)s)))), usrstop.userstopareacode DESC, usrstop.town, usrstop.name, usrstop.userstopcode LIMIT %(maxitems)s;"""
 
 KV1_STOPPLACE_QUAYS_SQL="""SELECT sp.id, sp.name, sp.description, sp.stopplacetype, sp.street, sp.town, sp.postalregion, q.dataownercode, q.publiccode, q.name, q.transportmode, q.longitude, q.latitude, q.altitude, q.x, q.y, q.description, q.boardinguse, q.aligtinguse, q.quaytype FROM stopplaces AS sp, quays AS q WHERE sp.id = %(stoparea)s AND sp.id = q.stopplace;"""
+
+KV1_QUAY_SQL="""SELECT q.dataownercode, q.publiccode, q.name, q.transportmode, q.longitude, q.latitude, q.altitude, q.x, q.y, q.description, q.boardinguse, q.aligtinguse, q.quaytype FROM quays AS q WHERE q.id = %(quay)s;"""
